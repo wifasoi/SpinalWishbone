@@ -1,4 +1,4 @@
-name := "SpinalTemplateSbt"
+name := "SpinalWishbone"
 
 version := "1.0"
 

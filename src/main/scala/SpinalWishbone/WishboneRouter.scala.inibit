@@ -1,0 +1,15 @@
+package spinal.lib.bus.wishbone
+
+import spinal.core._
+import spinal.lib._
+import spinal.lib.bus.misc.SizeMapping
+import spinal.lib.bus.wishbone._
+
+class WishboneBus(config : WishboneConfig, decodings : Seq[SizeMapping]){
+  val io = new Bundle{
+    val mast = slave(Wishbone(config))
+    val slav = Vec(master(Wishbone(config)))
+  }
+  val select
+  val mast <> select.muxList((index,io.slav).zipped)
+}
