@@ -20,12 +20,12 @@ class WishboneInterconFactory(){
   }
 
   def build() = new Area {
-    def arbiters = for(slave <- slaves.unzip._1) yield new Area{
+    val arbiters = for(slave <- slaves.unzip._1) yield new Area{
       val arbiter = new WishboneArbiter(slave.getConfig, masters.size)
       arbiter.io.output <> slave
     }
 
-    def decoders = for(master <- masters) yield new Area{
+    val decoders = for(master <- masters) yield new Area{
       val decoder = new WishboneDecoder(master.config, slaves.unzip._2.toList)
       decoder.io.input <> master
       println("decoder "+ decoder.toString +" -> "+ master.toString)
