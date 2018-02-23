@@ -1,10 +1,7 @@
 package spinal.lib.bus.wishbone
 
 import spinal.core._
-import spinal.lib._
 import spinal.lib.bus.misc.SizeMapping
-import spinal.lib.bus.wishbone._
-
 import scala.collection.mutable
 
 class WishboneInterconFactory(){
@@ -23,13 +20,13 @@ class WishboneInterconFactory(){
     val arbiters = for(slave <- slaves.unzip._1) yield new Area{
       val arbiter = new WishboneArbiter(slave.getConfig, masters.size)
       arbiter.io.output <> slave
+      arbiter.setPartialName(slave,"arbiter")
     }
 
     val decoders = for(master <- masters) yield new Area{
       val decoder = new WishboneDecoder(master.config, slaves.unzip._2.toList)
       decoder.io.input <> master
-      println("decoder "+ decoder.toString +" -> "+ master.toString)
-
+      decoder.setPartialName(master,"decoder")
     }
 
     for((arbiter,count_arb) <- (arbiters).zipWithIndex){

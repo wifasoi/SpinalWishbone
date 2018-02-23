@@ -1,8 +1,7 @@
-package spinal.lib.bus.wishbone
 
 import spinal.core._
 import spinal.lib._
-import spinal.lib.io.{TriStateArray, TriState}
+import spinal.lib.io.TriStateArray
 import spinal.lib.bus.wishbone._
 
 class WishboneGPIO(config : WishboneConfig, gpioWidth : Int) extends Component{

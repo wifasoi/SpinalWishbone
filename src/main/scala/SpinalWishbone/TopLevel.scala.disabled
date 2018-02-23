@@ -134,7 +134,7 @@ class WishboneInt extends Component{
     //val masters = slave(Wishbone(WishboneConfig(8,8,useCYC = true)))
     //val slaves = master(Wishbone(WishboneConfig(8,8,useCYC = true)))
   }
-  val intercon = new WishboneInterconFactory()  
+  val intercon = new WishboneInterconFactory()
   intercon.addMaster(io.masters(0))
   intercon.addMaster(io.masters(1))
   intercon.addMaster(io.masters(2))
@@ -149,19 +149,16 @@ class WishboneInt extends Component{
 
 class WishboneInt2 extends Component{
   val io = new Bundle{
-    val masters = Vec(slave(Wishbone(WishboneConfig(8,8,useCYC = true))),1)
-    val slaves = Vec(master(Wishbone(WishboneConfig(8,8,useCYC = true))),2)
+    val masters = Vec(slave(Wishbone(WishboneConfig(8,8,useCYC = true))),2)
+    val slaves = Vec(master(Wishbone(WishboneConfig(8,8,useCYC = true))),3)
   }
-  val intercon = new WishboneInterconFactory()  
+  val intercon = new WishboneInterconFactory()
   for(mast <- io.masters){
     intercon.addMaster(mast)
   }
   for((slav,num) <- (io.slaves).zipWithIndex){
     intercon.addSlave(slav,SizeMapping(num*4, 4))
   }
-  //intercon.addMaster(io.masters(0))
-  //intercon.addSlave(io.slaves(0),SizeMapping(0x00, 2))
-  //intercon.addSlave(io.slaves(1),SizeMapping(0x10, 2))
 
   val inte = intercon.build()
 }
@@ -278,24 +275,24 @@ object MyTopLevel {
 //    }
 
   //  SimConfig(rtl = new WishboneInt).withWave.doManagedSim{ dut =>
-  //    
+  //
   //    dut.clockDomain.forkStimulus(period = 2)
   //    val wbm1 = new WishboneSim(dut,dut.io.masters(0))
   //    val wbm2 = new WishboneSim(dut,dut.io.masters(1))
   //    val wbm3 = new WishboneSim(dut,dut.io.masters(2))
 
-  //    
+  //
   //    val wbs1 = new WishboneSim(dut,dut.io.slaves(0))
   //    val wbs2 = new WishboneSim(dut,dut.io.slaves(1))
   //    val wbs3 = new WishboneSim(dut,dut.io.slaves(2))
   //    val wbs4 = new WishboneSim(dut,dut.io.slaves(3))
-  //    
+  //
   //    val master1 = fork{val _ = wbm1.sendAsMaster(List( WishboneMasterTransaction(BigInt("00",16),16,true),
   //                                                      WishboneMasterTransaction(BigInt("0C",16),16,true)))}
   //    val master2 = fork{val _ = wbm2.sendAsMaster(List( WishboneMasterTransaction(BigInt("08",16),16,true)))}
   //    val master3 = fork{val _ = wbm3.sendAsMaster(List( WishboneMasterTransaction(BigInt("04",16),16,true)))}
 
-  //  
+  //
   //  val slave1 = fork{val _ = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("00",16),1,true))}
   //    val slave2 = fork{val _ = wbs2.receiveAsSlave(WishboneSlaveTransaction(BigInt("04",16),1,true))}
   //    val slave3 = fork{val _ = wbs3.receiveAsSlave(WishboneSlaveTransaction(BigInt("08",16),1,true))}
@@ -310,44 +307,81 @@ object MyTopLevel {
   //    slave4.join()
   //  }
 
-    //SimConfig(rtl = new WishboneInt2).withWave.doManagedSim{ dut => 
-    //  dut.io.masters.foreach{ mast =>
-    //    mast.ACK #= false
-    //    mast.STB #= false
-    //    mast.CYC #= false
-    //    mast.ADR #= 0
-    //  }
-    //  //dut.io.master.ADR #= 0
-    //  //dut.io.msr.CYC #= false
-    //  //dut.io.msr.STB #= false
-    //  //dut.io.msr.STB #= false
-    //  dut.clockDomain.forkStimulus(period = 2)
-    //  val wbm1 = new WishboneSim(dut,dut.io.masters(0))
-    //  val wbm2 = new WishboneSim(dut,dut.io.masters(1))
-    //  val wbs1 = new WishboneSim(dut,dut.io.slaves(0))
-    //  val wbs2 = new WishboneSim(dut,dut.io.slaves(1))
-    //  val wbs3 = new WishboneSim(dut,dut.io.slaves(2))
+    SimConfig(rtl = new WishboneInt2).withWave.doManagedSim{ dut =>
+      dut.io.masters.foreach{ mast =>
+        mast.ACK #= false
+        mast.STB #= false
+        mast.CYC #= false
+        mast.ADR #= 0
+      }
+      dut.io.slaves(0).ACK #= false
+      dut.io.slaves(1).ACK #= false
+      dut.io.slaves(2).ACK #= false
+      //dut.io.master.ADR #= 0
+      //dut.io.msr.CYC #= false
+      //dut.io.msr.STB #= false
+      //dut.io.msr.STB #= false
+      dut.clockDomain.forkStimulus(period = 2)
+      val wbm1 = new WishboneSim(dut,dut.io.masters(0))
+      val wbm2 = new WishboneSim(dut,dut.io.masters(1))
+      val wbs1 = new WishboneSim(dut,dut.io.slaves(0))
+      val wbs2 = new WishboneSim(dut,dut.io.slaves(1))
+      val wbs3 = new WishboneSim(dut,dut.io.slaves(2))
 
-    //  
-    //  val master1 = fork{val _ = wbm1.sendAsMaster(List( WishboneMasterTransaction(BigInt("00",16),16,true)))}
-  ////    val master2 = fork{val _ = wbm2.sendAsMaster(List( WishboneMasterTransaction(BigInt("01",16),16,true)))}
+      val master1 = fork{
+        val _ = wbm1.sendAsMaster(List( WishboneMasterTransaction(BigInt("00",16),16,true),
+                                        WishboneMasterTransaction(BigInt("01",16),16,true),
+                                        WishboneMasterTransaction(BigInt("02",16),16,true)))}
+        sleep(10)
+        val master2 = fork{
+        val _ = wbm2.sendAsMaster(List( WishboneMasterTransaction(BigInt("00",16),16,true),
+                                        WishboneMasterTransaction(BigInt("02",16),16,true),
+                                        WishboneMasterTransaction(BigInt("01",16),16,true)))}
+      val slave1_1 = fork{val _1 = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("00",16),1,true))
+                          val _2 = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("01",16),1,true))
+                          val _3 = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("02",16),1,true))}
+      slave1_1.join()
+      val slave1_2 = fork{val _1 = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("00",16),1,true))
+                          val _2 = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("02",16),1,true))
+                          val _3 = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("01",16),1,true))}
+      //val slave1_3 = fork{val _1 = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("02",16),1,true))
+      //                    val _2 = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("02",16),1,true))}
+
+      //val slave1_2 = fork{val _ = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("01",16),1,true))}
+      //val slave1_3 = fork{val _ = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("02",16),1,true))}
+      //val slave1_4 = fork{val _ = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("00",16),1,true))}
+      //val slave1_5 = fork{val _ = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("01",16),1,true))}
+      //val slave1_6 = fork{val _ = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("02",16),1,true))}
+
+      val slave2_1 = fork{val _ = wbs2.receiveAsSlave(WishboneSlaveTransaction(BigInt("04",16),1,true))}
+      val slave2_2 = fork{val _ = wbs2.receiveAsSlave(WishboneSlaveTransaction(BigInt("05",16),1,true))}
+      val slave2_3 = fork{val _ = wbs2.receiveAsSlave(WishboneSlaveTransaction(BigInt("06",16),1,true))}
 
 
-    //  val slave1 = fork{val _ = wbs1.receiveAsSlave(WishboneSlaveTransaction(BigInt("00",16),1,true))}
-    //  val slave2 = fork{val _ = wbs2.receiveAsSlave(WishboneSlaveTransaction(BigInt("08",16),1,true))}
-    //  val slave3 = fork{val _ = wbs3.receiveAsSlave(WishboneSlaveTransaction(BigInt("10",16),1,true))}
-    //  val slavedouble = fork{val _ = wbs3.receiveAsSlave(WishboneSlaveTransaction(BigInt("10",16),1,true))}
+        master1.join()
+        val master1_2 = fork{
+        val _ = wbm1.sendAsMaster(List( WishboneMasterTransaction(BigInt("04",16),16,true),
+                                        WishboneMasterTransaction(BigInt("05",16),16,true),
+                                        WishboneMasterTransaction(BigInt("06",16),16,true)))}
 
-    //  master1.join()
-   ////   master2.join()
-    //  slave1.join()
-    //  slave2.join()
-    //  slave3.join()
-    //  slavedouble.join()
 
-    //  sleep(10)
-    //} 
-    SpinalVerilog(new WishboneInt2)
+      master2.join()
+      master1_2.join()
+
+      //slave1_1.join()
+      slave1_2.join()
+      //slave1_3.join()
+      //slave1_4.join()
+      //slave1_5.join()
+      //slave1_6.join()
+      slave2_1.join()
+      slave2_2.join()
+      slave2_3.join()
+
+
+
+      sleep(10)
+    }
   }
 
 }

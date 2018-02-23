@@ -1,0 +1,195 @@
+package spinal.lib.wishbone.sim
+
+import spinal.lib.bus.misc._
+import spinal.sim._
+import spinal.core._
+import spinal.core.sim._
+import spinal.lib.bus.wishbone._
+import scala.collection.mutable._
+
+case class WishboneMasterTransaction( address : BigInt,
+                                      data : Long,
+                                      WE : Boolean,
+                                      isNOP : Boolean = false,
+                                      delay : Int = 0)
+
+
+case class WishboneSlaveTransaction(address : BigInt,
+                                    data : Long,
+                                    isWrite : Boolean,
+                                    delay : Int = 0)
+
+case class WishboneMasterPipelinedTransaction(address : BigInt,
+									 data : Long,
+									 WE : Boolean,
+									 isNOP : Boolean = false,
+									 delay : Int = 0)
+
+case class WishboneMasterResponse(address : BigInt, data : Long = 0)
+
+case class WishboneSlaveResponse( address : BigInt, data : Long)
+
+
+object WishboneSim{
+  def apply(clockDomain : ClockDomain, wb : Wishbone) : WishboneSim = new WishboneSim(clockDomain,wb)
+}
+
+class WishboneSim(clockDomain : ClockDomain, wb : Wishbone){
+  def masterPipelined(transaction : List[WishboneMasterPipelinedTransaction]) : List[WishboneMasterResponse]@suspendable = {
+    val ret = ListBuffer[WishboneMasterResponse]()
+    var count = 0
+    wb.CYC #= true
+    wb.STB #= true
+
+    val counter = fork{
+      while(count <= transaction.length){
+        clockDomain.waitActiveEdgeWhere(wb.ACK.toBoolean)
+        count += 1
+      }
+    }
+
+   transaction.suspendable.foreach{ tran =>
+	  wb.WE #= tran.WE
+      wb.ADR #= tran.address
+      clockDomain.waitActiveEdgeWhere(!wb.STALL.toBoolean)
+      ret += new WishboneMasterResponse( address = tran.address, data = tran.data)
+      clockDomain.waitActiveEdge()
+	}
+    counter.join()
+    clockDomain.waitActiveEdgeWhere(!wb.ACK.toBoolean)
+    wb.CYC #= false
+    ret.toList
+  }
+
+  def slavePipelined(transaction : WishboneMasterPipelinedTransaction) : List[WishboneSlaveResponse]@suspendable = {
+    val ret = ListBuffer[WishboneSlaveResponse]()
+    while(wb.CYC.toBoolean && transaction.address.equals(wb.ADR.toBigInt)){
+      clockDomain.waitActiveEdgeWhere(wb.STB.toBoolean)
+      wb.ACK #= true
+      ret += new WishboneSlaveResponse( address = transaction.address, data = transaction.data)
+    }
+    wb.CYC #= false
+    ret.toList
+  }
+
+
+  def master(transaction : List[WishboneMasterTransaction]) : List[WishboneMasterResponse]@suspendable ={
+    val ret = ListBuffer[WishboneMasterResponse]()
+    transaction.suspendable.foreach{ tran =>
+      clockDomain.waitActiveEdge()
+      wb.CYC #= true
+      wb.STB #= true
+      wb.WE #= tran.WE
+      wb.ADR #= tran.address
+      if(tran.WE) wb.DAT_MOSI #= tran.data
+      if(!tran.WE) ret += new WishboneMasterResponse( address = tran.address, data = tran.data)
+
+      clockDomain.waitActiveEdgeWhere(wb.ACK.toBoolean)
+      clockDomain.waitActiveEdge(tran.delay)
+      wb.STB #= false
+    }
+    wb.CYC #= false
+    ret.toList
+  }
+
+  def slave(tran : WishboneSlaveTransaction) : List[WishboneSlaveResponse]@suspendable = {
+    val ret = ListBuffer[WishboneSlaveResponse]()
+    //while(wb.CYC.toBoolean && wb.ADR.toBigInt == tran.address){
+    //Awhile(wb.CYC.toBoolean){
+    //while(true){
+      clockDomain.waitActiveEdgeWhere(wb.STB.toBoolean && wb.CYC.toBoolean && wb.ADR.toBigInt == tran.address)
+      wb.ACK #= true
+      ret += new WishboneSlaveResponse(address = wb.ADR.toBigInt, data = wb.DAT_MOSI.toLong)
+      clockDomain.waitActiveEdge(tran.delay)
+      wb.ACK #= false
+    //}
+    wb.ACK #= false
+    ret.toList
+  }
+}
+//////////////////////////////////////
+case class WishboneTransaction( address : BigInt,
+                                data : Long,
+                                WE : Boolean
+                                )
+
+
+class WishboneDrive(wishbone: Wishbone, clockdomain: ClockDomain, driver: () => Unit){
+  def sendData(address: BigInt, data: Long): Unit@suspendable = {
+    clockdomain.waitActiveEdgeWhere(wishbone.isCycle.toBoolean)
+    wishbone.STB #= true
+    wishbone.WE #= true
+    wishbone.ADR #= address
+    wishbone.DAT_MOSI #= data
+    clockdomain.waitActiveEdgeWhere(wishbone.isAcknoledge.toBoolean)
+  }
+
+  def receiveData(address: BigInt): Long@suspendable = {
+    clockdomain.waitActiveEdgeWhere(wishbone.isCycle.toBoolean)
+    wishbone.STB #= true
+    wishbone.WE #= false
+    wishbone.ADR #= address
+    clockdomain.waitActiveEdgeWhere(wishbone.isAcknoledge.toBoolean)
+    val data = wishbone.DAT_MISO.toLong
+    data
+  }
+
+  def sendAsMaster(transaction: WishboneTransaction): Unit@suspendable = {
+    fork{
+      clockdomain.waitActiveEdge()
+      wishbone.CYC #= true
+      sendData(transaction.address, transaction.data)
+      wishbone.STB #= false
+      wishbone.CYC #= false
+    }
+  }
+  def receiveAsMaster(transaction: WishboneTransaction): WishboneTransaction@suspendable = {
+    var data = null
+    val receive = fork{
+      clockdomain.waitActiveEdge()
+      wishbone.CYC #= true
+      val data = new WishboneTransaction(transaction.address, receiveData(transaction.address), transaction.WE)
+      wishbone.STB #= false
+      wishbone.CYC #= false
+    }
+    receive.join()
+    data
+  }
+
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////
+trait BusMonitor[T <: Data]{
+  val bus: AnyRef
+  val clockDomain: ClockDomain
+  val callbacks = HashMap[BigInt,(T) => Unit]()
+
+  def addCallback(address : BigInt, callback: (T) => Unit): this.type = {
+    address -> callback
+    this
+  }
+
+  val poll: AnyRef
+}
+
+object WishboneSlaveMonitor{
+  def apply(wishbone : Wishbone, clockdomain : ClockDomain)(callback : (Bits) => Unit) = new WishboneSlaveMonitor(wishbone, clockdomain).addCallback(callback)
+}
+
+class WishboneSlaveMonitor(bus: Wishbone, clockDomain: ClockDomain) extends BusMonitor[Bits]{
+  val poll = fork{
+    clockDomain.waitActiveEdgeWhere(bus.isAcknoledge.toBoolean)
+    callbacks.foreach(_ (bus.DAT_MOSI))
+  }
+}
+
+object WishboneMasterMonitor{
+  def apply(wishbone : Wishbone, clockdomain : ClockDomain)(callback : (Bits) => Unit) = new WishboneMasterMonitor(wishbone, clockdomain).addCallback(callback)
+}
+
+class WishboneMasterMonitor(bus: Wishbone, clockDomain: ClockDomain) extends BusMonitor[Bits]{
+  val poll = fork{
+    clockDomain.waitActiveEdgeWhere(bus.isStrobe.toBoolean)
+    callbacks.foreach(_ (bus.DAT_MISO))
+  }
+}
